@@ -1,0 +1,123 @@
+#!/usr/bin/env -S python3 -I
+"""desk: an agent posts open questions and its worklist to the Herdr "desk" panel.
+
+  desk ask "Question?" [--rec "Recommendation"] ["Another?" ...]
+  desk list "Topic" "Topic" ...     replace the worklist
+  desk add "Topic" ...              append to it
+  desk doing N | done N... | skip N...
+  desk clear [questions|list]
+  desk show
+
+One JSON file per Herdr terminal ($HC_TERMINAL_ID) in ~/.config/herdr-app/desk/.
+Answers come back as a prompt typed into the agent's terminal; nothing to poll.
+Prints "ok" so a call costs the agent almost nothing.
+"""
+import json
+import os
+import sys
+import tempfile
+import time
+
+HOME = os.environ.get("HERDR_APP_HOME") or os.path.expanduser("~/.config/herdr-app")
+DIR = os.path.join(HOME, "desk")
+MARKS = {"open": "·", "doing": "▶", "done": "✓", "skipped": "–"}
+
+
+def fail(msg):
+    print(f"desk: {msg}", file=sys.stderr)
+    sys.exit(2)
+
+
+def load(path):
+    try:
+        with open(path) as f:
+            data = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        data = {}
+    data.setdefault("questions", [])
+    data.setdefault("list", [])
+    data.setdefault("next_q", 1)
+    return data
+
+
+def save(path, data):
+    data["updated"] = int(time.time() * 1000)
+    os.makedirs(DIR, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=DIR, prefix=".desk-")
+    with os.fdopen(fd, "w") as f:
+        json.dump(data, f, ensure_ascii=False, indent=1)
+    os.replace(tmp, path)
+
+
+def numbers(args):
+    try:
+        return [int(a) for a in args]
+    except ValueError:
+        fail("give item numbers, e.g. desk done 2 3")
+
+
+def main(argv):
+    if not argv or argv[0] in ("-h", "--help", "help"):
+        print(__doc__.strip())
+        return
+    terminal = os.environ.get("HC_TERMINAL_ID")
+    if not terminal:
+        print("ok (not in Herdr: nothing shown)")
+        return
+    path = os.path.join(DIR, terminal.replace("/", "_") + ".json")
+    data = load(path)
+    data["terminal"] = terminal
+    data["cwd"] = os.getcwd()
+    cmd, args = argv[0], argv[1:]
+
+    if cmd == "ask":
+        if not args:
+            fail('desk ask "Question?" [--rec "..."]')
+        i = 0
+        while i < len(args):
+            if args[i] == "--rec":
+                if not data["questions"] or i + 1 >= len(args):
+                    fail("--rec follows a question and takes a value")
+                data["questions"][-1]["rec"] = args[i + 1]
+                i += 2
+                continue
+            data["questions"].append({"id": data["next_q"], "text": args[i], "at": int(time.time() * 1000)})
+            data["next_q"] += 1
+            i += 1
+    elif cmd == "list":
+        data["list"] = [{"n": n, "text": t, "status": "open"} for n, t in enumerate(args, 1)]
+    elif cmd == "add":
+        start = max((item["n"] for item in data["list"]), default=0)
+        data["list"] += [{"n": start + k, "text": t, "status": "open"} for k, t in enumerate(args, 1)]
+    elif cmd in ("doing", "done", "skip"):
+        status = {"doing": "doing", "done": "done", "skip": "skipped"}[cmd]
+        wanted = set(numbers(args))
+        found = {item["n"] for item in data["list"]}
+        if not wanted or wanted - found:
+            fail(f"no item {sorted(wanted - found) or ''} in the worklist")
+        for item in data["list"]:
+            if item["n"] in wanted:
+                item["status"] = status
+            elif status == "doing" and item["status"] == "doing":
+                item["status"] = "open"
+    elif cmd == "clear":
+        which = args[0] if args else "all"
+        if which in ("questions", "all"):
+            data["questions"] = []
+        if which in ("list", "all"):
+            data["list"] = []
+    elif cmd == "show":
+        for q in data["questions"]:
+            print(f"Q{q['id']}: {q['text']}" + (f" (rec: {q['rec']})" if q.get("rec") else ""))
+        for item in data["list"]:
+            print(f"{MARKS.get(item['status'], '·')} {item['n']}. {item['text']}")
+        return
+    else:
+        fail(f'unknown command "{cmd}" (desk --help)')
+
+    save(path, data)
+    print("ok")
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
