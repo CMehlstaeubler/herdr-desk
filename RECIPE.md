@@ -15,7 +15,7 @@ Top to bottom, in a 340px column docked right (`mod.json`: `place: "right"`, `si
 3. **Card area**, scrollable (`overflow_y_scrollbar`), padding 10. One card for the agent you're on, or the dim line "No questions or worklist from this agent." Card: `surface`, 1px `border`, radius 8, padding 10, gap 8:
    - **Agent row**: an 8px status dot in the theme color of its status (`working`, `blocked`, `done`, `idle`), the name "<space> · <terminal title or tab name>" in semibold (truncated), and the terminal address (`t1q`) in 11px `dim` on the right.
    - **Questions**: "Q<id>" in `blocked` semibold, the question text, and a dim "×" on the right. Under it, when there is one, "Rec: <recommendation>" in 11px `muted`, then an answer box: 28px tall, radius 6, 1px `input` border, `background` fill, 12px text; its placeholder is "Enter = <recommendation>" (clipped to 40 characters) or "Answer…".
-   - **Send answers** button, right-aligned, 26px, radius 6, 12px semibold: `solid` / `solid_foreground` when at least one question has a typed answer or a recommendation, else `raised` / `dim`.
+   - A row under the questions: **Clear all** on the left (11px `dim`, `hover` fill, radius 5), the **Send answers** button on the right, 26px, radius 6, 12px semibold: `solid` / `solid_foreground` when at least one question has a typed answer or a recommendation, else `raised` / `dim`.
    - **Worklist**: "Worklist <done>/<total>" in 11px `dim`, then one row per item: a mark (`✓` in `done`, `▶` in `working`, `·` in `dim`, `–` for skipped) and "<n>. <text>". The item in progress is semibold `foreground`, open ones `muted`, done and skipped ones `dim`.
 4. **Divider**, 6px tall, `border_b` 1px `border`, row-resize cursor, `hover` fill: dragging it sets the height of everything below it (default 300px, at least 120px, at most the panel's height minus 140px).
 5. **Prompts**: a 30px header row with "Prompts" in semibold, a hint in 11px `dim` ("click to send · right-click to edit", or "sent “<label>”" after a send) and a 22px **+** button on the right (**×** while the form is open). Below, the buttons wrap: each 24px tall, padding 9, radius 6, `raised` fill, 1px `border` (`input` on hover, `accent` while it is being edited), 11.5px label.
@@ -27,7 +27,7 @@ Top to bottom, in a 340px column docked right (`mod.json`: `place: "right"`, `si
 - **Only the agent you're on.** Questions, worklist and notes all follow `focused().terminal` (falling back to the focused agent). While focus is inside the Desk itself (typing an answer or a note), the last agent stays.
 - **Agents post** by running `desk` in their shell. The CLI finds its terminal through `$HC_TERMINAL_ID` (set by herdr-core in every terminal) and writes `~/.config/herdr-app/desk/<terminal>.json`. The panel watches that folder with `watchFolder`, so a post shows within a moment and nothing polls.
 - **Answering:** type in a question's box, or leave it empty to accept the recommendation. Enter in any box, or **Send answers**, sends every answered question of that agent as one line typed into its terminal with `hc send`: `Desk answers: Q1 "<question, max 80 chars>": <answer> | Q2 "…": <recommendation> (your recommendation)`. The agent reads it as a normal prompt; mid-turn, Claude Code takes it as a message during the turn. Sent questions are removed from the file. A question with neither a typed answer nor a recommendation is not sent.
-- **×** drops a question without answering.
+- **×** drops a question without answering; **Clear all** drops all of the agent's questions (for answers given in chat). Agents do the same with `desk close`.
 - **Clicking a worklist item** ticks it: open or in progress becomes done, done or skipped becomes open (the person's override; the agent's next `desk` call can change it again).
 - **Clicking the agent row** runs `agent.focus {terminal}`.
 - **Prompts:** a click types the button's prompt into the agent you're on with `hc send` (paste + Enter), so `/skills` run too. Right-click opens the form filled with that button; Enter in either field or **Save** stores it, **Delete** removes it. Without a label, the prompt names its button (first 24 characters). The buttons are shared by all agents and live in `~/.config/herdr-app/desk-prompts/prompts.json` (`[{ "label", "text" }]`); the first start writes three starters (`continue`, `/compact`, "What's left?"), and a hand edit of the file shows at once.
@@ -47,19 +47,20 @@ Top to bottom, in a 340px column docked right (`mod.json`: `place: "right"`, `si
   - Root element: `on_size_change` (panel height, for the divider's maximum), `on_mouse_move` / `on_mouse_up` / `on_hover` (the drag).
   - Timers: `cx.timer.every(800)` flushes the note, `cx.timer.every(20000)` measures the context.
 - **`mods/desk/desk`**, the CLI (Python 3, standard library only), linked onto PATH: `ln -s ~/.config/herdr-app/mods/desk/desk ~/.local/bin/desk`.
-  - `desk ask "Question?" [--rec "pick"] ["Another?" …]`: `--rec` belongs to the question before it; ids count up per terminal.
-  - `desk list "Topic" …` replaces the worklist; `desk add "Topic" …` appends.
+  - `desk ask "Question?" [--rec "pick"] ["Another?" …]`: `--rec` belongs to the question before it; ids count up per terminal; prints `ok Q4 Q5`, the new ids.
+  - `desk close N…` (also `Q4`) removes questions, `desk close all` all of them; an unknown id exits 2.
+  - `desk list "Topic" …` replaces the worklist; `desk add "Topic" …` appends; `desk set N "text"` rewords an item; `desk rm N…` removes items, the others keep their numbers.
   - `desk doing N` (at most one item in progress), `desk done N…`, `desk skip N…`.
   - `desk clear [questions|list]`, `desk show` (prints the state, for an agent that lost track).
-  - Prints `ok` and nothing else. Outside Herdr (`$HC_TERMINAL_ID` unset) it writes nothing and prints `ok (not in Herdr: nothing shown)`. Bad input exits 2 with one line on stderr.
+  - Prints `ok` (after `ask`, plus the new ids) and nothing else. Outside Herdr (`$HC_TERMINAL_ID` unset) it writes nothing and prints `ok (not in Herdr: nothing shown)`. Bad input exits 2 with one line on stderr.
   - Writes atomically (temporary file + rename). File shape: `{ terminal, cwd, updated, next_q, questions: [{ id, text, rec?, at }], list: [{ n, text, status: "open"|"doing"|"done"|"skipped" }] }`.
 - **The agents' instructions**: add these lines to the agent's own instructions (for Claude Code `~/.claude/CLAUDE.md`, for Codex `~/.codex/AGENTS.md`):
 
   ```
   ## Herdr desk
   Inside Herdr (`$HC_TERMINAL_ID` set), post to the person's Desk panel with the `desk` CLI; it prints `ok`, don't read it back.
-  - Every question that waits on their decision goes through `desk ask`, all of them in one call, each with your recommendation: `desk ask "First?" --rec "your pick" "Second?" --rec "your pick"`. In chat, end with one line ("2 questions in the Desk") instead of repeating them. Their answers arrive as a prompt starting "Desk answers:".
-  - Work of 3+ steps: `desk list "Step" ...` once, then `desk doing N` / `desk done N` as you go. No other updates.
+  - Every question that waits on their decision goes through `desk ask`, all of them in one call, each with your recommendation: `desk ask "First?" --rec "your pick" "Second?" --rec "your pick"`. In chat, end with one line ("2 questions in the Desk") instead of repeating them. Their answers arrive as a prompt starting "Desk answers:". When they answer one in chat instead, or it no longer matters, `desk close N` (ids from `desk ask`'s output; `desk show` lists them).
+  - Work of 3+ steps: `desk list "Step" ...` once, then `desk doing N` / `desk done N` as you go; when the plan changes, `desk set N "text"`, `desk add`, `desk rm N`. No other updates.
   ```
 - No `keys.json`.
 
@@ -86,6 +87,7 @@ Top to bottom, in a 340px column docked right (`mod.json`: `place: "right"`, `si
 - Pressing Enter in the empty box types `Desk answers: Q1 "Test?": Yes (your recommendation)` into that terminal, and Q1 disappears.
 - `desk list "A" "B" "C"; desk done 1; desk doing 2` shows `✓ 1. A`, `▶ 2. B` in semibold, `· 3. C`, and "Worklist 1/3".
 - Switching to another agent shows that agent's card and note instead; switching back brings the first ones back.
+- `desk ask "A?" "B?"` prints `ok Q1 Q2`; `desk close 1` leaves only Q2 in the card; **Clear all** empties it.
 - Text typed in Notes is still there after switching agents and back, and is in `~/.config/herdr-app/desk-notes/<terminal>.md`.
 - The Desk header's bottom border lines up with the tab bar's.
 - On a Claude Code agent the header shows the gauge, e.g. "55k · 6%"; on a shell it shows none.

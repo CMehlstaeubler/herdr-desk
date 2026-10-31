@@ -332,9 +332,10 @@ export default class Desk extends View {
     });
   }
 
+  // Drops one question (id) or all of them (null) without answering: say, after you answered in chat.
   dismiss(terminal, id, cx) {
     cx.spawn(async (cx) => {
-      try { await this.change(terminal, (d) => { d.questions = d.questions.filter((q) => q.id !== id); }); }
+      try { await this.change(terminal, (d) => { d.questions = id === null ? [] : d.questions.filter((q) => q.id !== id); }); }
       catch (e) { this.error = `Could not save: ${e.message ?? e}`; cx.notify(); }
     });
   }
@@ -401,7 +402,11 @@ export default class Desk extends View {
     const done = list.filter((i) => i.status === "done" || i.status === "skipped").length;
     return v_flex().gap(8).p(10).rounded(8).bg(t.surface).border_1().border_color(t.border)
       .child(header)
-      .when(questions.length > 0, (el) => el.children(qRows).child(h_flex().justify_end().child(send)))
+      .when(questions.length > 0, (el) => el.children(qRows).child(h_flex().items_center()
+        .child(div().id(`clear-${terminal}`).px(6).h(22).rounded(5).flex().items_center().cursor_pointer()
+          .text_size(11).text_color(t.dim).hover((s) => s.bg(t.hover).text_color(t.foreground))
+          .on_click((_e, cx) => this.dismiss(terminal, null, cx)).child("Clear all"))
+        .child(div().flex_1()).child(send)))
       .when(list.length > 0, (el) => el
         .child(div().text_size(11).text_color(t.dim).child(`Worklist ${done}/${list.length}`))
         .child(v_flex().gap(2).children(items)));

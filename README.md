@@ -18,7 +18,7 @@ When you run many agents at once, their questions get buried in the scrollback a
 
 | | |
 |---|---|
-| **Questions** | Each with the agent's recommendation and an answer box. Empty + Enter = accept the recommendation. One **Send answers** sends them all. `×` drops a question. |
+| **Questions** | Each with the agent's recommendation and an answer box. Empty + Enter = accept the recommendation. One **Send answers** sends them all. `×` drops a question, **Clear all** drops them all (say, after you answered in chat). |
 | **Worklist** | `✓` done, `▶` in progress, `·` open. Click an item to tick it yourself. |
 | **Prompts** | Buttons that type a prompt or `/skill` into the agent and press Enter. **+** adds one (a label and the prompt), right-click edits or deletes it. Shared by all agents. |
 | **Notes** | Your own scratchpad per agent, saved automatically. The agent never sees it. |
@@ -50,8 +50,8 @@ Then tell your agents about it. Add this to their instructions (Claude Code: `~/
 ```markdown
 ## Herdr desk
 Inside Herdr (`$HC_TERMINAL_ID` set), post to the person's Desk panel with the `desk` CLI; it prints `ok`, don't read it back.
-- Every question that waits on their decision goes through `desk ask`, all of them in one call, each with your recommendation: `desk ask "First?" --rec "your pick" "Second?" --rec "your pick"`. In chat, end with one line ("2 questions in the Desk") instead of repeating them. Their answers arrive as a prompt starting "Desk answers:".
-- Work of 3+ steps: `desk list "Step" ...` once, then `desk doing N` / `desk done N` as you go. No other updates.
+- Every question that waits on their decision goes through `desk ask`, all of them in one call, each with your recommendation: `desk ask "First?" --rec "your pick" "Second?" --rec "your pick"`. In chat, end with one line ("2 questions in the Desk") instead of repeating them. Their answers arrive as a prompt starting "Desk answers:". When they answer one in chat instead, or it no longer matters, `desk close N` (ids from `desk ask`'s output; `desk show` lists them).
+- Work of 3+ steps: `desk list "Step" ...` once, then `desk doing N` / `desk done N` as you go; when the plan changes, `desk set N "text"`, `desk add`, `desk rm N`. No other updates.
 ```
 
 Make it **the** way to ask, not an extra step: an agent told to ask "also" in the Desk asks in chat and forgets the Desk. If your project's own instructions say how to ask (in chat, in a queue), change them to match, or they win. Agents that were already running pick it up after a restart.
@@ -59,9 +59,12 @@ Make it **the** way to ask, not an extra step: an agent told to ask "also" in th
 ## The CLI
 
 ```sh
-desk ask "Question?" --rec "your pick" ["Another?" --rec "…" …]
+desk ask "Question?" --rec "your pick" ["Another?" --rec "…" …]   # prints "ok Q4 Q5"
+desk close 4 5   |   desk close all   # remove questions answered in chat, or moot
 desk list "Step" "Step" …        # replace the worklist
 desk add "Step" …                # append
+desk set 2 "New text"            # reword an item
+desk rm 4                        # remove an item; the others keep their numbers
 desk doing 3                     # one item in progress at a time
 desk done 1 2   |   desk skip 4
 desk clear [questions|list]
