@@ -59,7 +59,7 @@ Top to bottom, in a 340px column docked right (`mod.json`: `place: "right"`, `si
   ```
   ## Herdr desk
   Inside Herdr (`$HC_TERMINAL_ID` set), post to the person's Desk panel with the `desk` CLI; it prints `ok`, don't read it back.
-  - Every question that waits on their decision goes through `desk ask`, all of them in one call, each with your recommendation: `desk ask "First?" --rec "your pick" "Second?" --rec "your pick"`. In chat, end with one line ("2 questions in the Desk") instead of repeating them. Their answers arrive as a prompt starting "Desk answers:". When they answer one in chat instead, or it no longer matters, `desk close N` (ids from `desk ask`'s output; `desk show` lists them).
+  - Every question that waits on their decision goes through `desk ask`, all of them in one call, each with your recommendation: `desk ask "First?" --rec "your pick" "Second?" --rec "your pick"`. Each Desk question stands on its own: the case, the options and your pick, so it can be answered from the Desk alone. In chat, report what you did and found, but don't lay out the options or the question again. End the chat with one line ("2 questions in the Desk"). No question dialog (Claude Code's AskUserQuestion). Their answers arrive as a prompt starting "Desk answers:". When they answer one in chat instead, or it no longer matters, `desk close N` (ids from `desk ask`'s output; `desk show` lists them).
   - Work of 3+ steps: `desk list "Step" ...` once, then `desk doing N` / `desk done N` as you go; when the plan changes, `desk set N "text"`, `desk add`, `desk rm N`. No other updates.
   ```
 - No `keys.json`.
